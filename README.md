@@ -9,6 +9,11 @@ Stand 1.1 (31.10.2026): an API 2.0 angepasst, ungetestet. In Arbeit, nicht Teil 
 
 Herkunft: bis 30.10.2026 in Karre-ops/retrodesk2 unter apps/burgen (Commit c02e85a).
 
+## Fertiges Programm
+
+bin/BURGEN.EXE (RD2 2.1, API 2.0) nach A:\RD2 bzw. C:\RD2 kopieren und in RD2 starten. Pruefsumme in bin/SHA256.TXT.
+Wird bei jeder Aenderung neu gebaut und mit eingecheckt.
+
 ## Bauen
 
 Fuer RetroDesk 2.1 (SDK API 2.0). Braucht eine gebaute Arbeitskopie von Karre-ops/retrodesk2
