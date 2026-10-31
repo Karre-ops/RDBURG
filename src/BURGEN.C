@@ -15,7 +15,9 @@
  * Computers (KIFPU.C, geschlossene Loesung der Wurfparabel statt Suche mit Probeschuessen).
  *
  * Grafik: die Welt wird auf das Fenster skaliert (alle RD2-Grafikarten, Groesse veraenderbar).
- * 1 Bit (CGA, Hercules, VGA mono): Muster; 16/256 Farben: Farben und zweifarbige Muster.
+ * 1 Bit (CGA, Hercules, VGA/EGA mono): Muster; 4 Farben (CGA4, EGA4, VGA4): Muster mit den
+ * Farben, die es in beiden 4-Farben-Paletten gibt; 16/256 Farben: Farben und zweifarbige Muster.
+ * Schmale Schirme (320 Punkte: CGA4, EGA320, MCGA): kurze Statuszeilen. Gebaut fuer API 2.0 (RD2 2.1).
  *
  * Befehlszeile (fuer Tests, sonst Dialog "Neues Spiel"): K gegen Computer, 2 zwei Spieler,
  *   H Netz eroeffnen, J<adresse[:port]> Netz beitreten, P<port>, S<zahl> Startwert, L<0..2> Staerke,
@@ -98,6 +100,7 @@ typedef struct {
 typedef struct { long x, y, vx, vy; } KUGEL;      /* 16.16: hohes Wort = Welteinheit */
 
 static HINST hi; static HWND fe;
+static BYTE schmal;                               /* Fenster unter 480 Punkten: kurze Texte */
 static BYTE test, demo, ohne87, fpu, mono, zshot, staerke = 1, spielart, ich, sofort;
 static short cw, ch, yt, th;                      /* Fenster: Breite, Hoehe, Weltbeginn, Textzeile */
 static short boden[GN];
@@ -326,7 +329,16 @@ static void wrect(RECT *q, short x0, short y0, short x1, short y1)
 enum { F_HIMMEL, F_BODEN, F_MAUER, F_KOENIG, F_PULVER, F_GOLD, F_MINE, F_SCHWARZ, F_ROT, F_BLAU, F_LEISTE };
 static void pinsel(HDC dc, BYTE f)
 {
-    if (mono) {                                   /* 1 Bit: Muster schwarz auf weiss */
+    if (mono == 2) {                              /* 4 Farben: tuerkis gibt es in CGA4 (hell) und EGA4/VGA4 */
+        switch (f) {                              /* RGB(200,100,200): CGA4 rosa, EGA4/VGA4 hellgrau */
+        case F_HIMMEL: SetBrush(dc, RGB(85, 255, 255), PAT_SOLID); return;
+        case F_BODEN:  SetBkColor(dc, C_WHITE); SetBrush(dc, C_BLACK, PAT_GRAY50); return;
+        case F_MAUER:  SetBkColor(dc, RGB(200, 100, 200)); SetBrush(dc, C_BLACK, PAT_HATCH); return;
+        case F_ROT:    SetBrush(dc, RGB(200, 100, 200), PAT_SOLID); return;
+        case F_LEISTE: SetBrush(dc, C_WHITE, PAT_SOLID); return;
+        }
+    }
+    if (mono) {                                   /* 1 Bit (und Rest bei 4 Farben): Muster schwarz auf weiss */
         static const WORD mu[11] = { PAT_SOLID, PAT_GRAY25, PAT_HATCH, PAT_SOLID, PAT_GRAY75, PAT_GRAY50, PAT_GRAY50, PAT_SOLID, PAT_SOLID, PAT_SOLID, PAT_SOLID };
         SetBkColor(dc, C_WHITE);
         SetBrush(dc, (f == F_HIMMEL || f == F_LEISTE || f == F_KOENIG) ? C_WHITE : C_BLACK, mu[f]);
@@ -403,30 +415,33 @@ static LPCSTR name(BYTE i)
 }
 static void zielmeld(void)
 {
-    char *p = meld; short n = kanonen(dran);
-    p = sapp(p, T(20)); p = szahl(p, b[dran].wahl + 1); *p++ = '/'; p = szahl(p, n);
-    p = sapp(p, T(21)); p = szahl(p, b[dran].winkel); p = sapp(p, T(22)); p = szahl(p, b[dran].ladung);
+    char *p = meld; short n = kanonen(dran); WORD k = schmal ? 100 : 0;   /* 120.. = kurze Texte */
+    p = sapp(p, T(20 + k)); p = szahl(p, b[dran].wahl + 1); *p++ = '/'; p = szahl(p, n);
+    p = sapp(p, T(21 + k)); p = szahl(p, b[dran].winkel); p = sapp(p, T(22 + k)); p = szahl(p, b[dran].ladung);
 }
 
 static void zeichne_leiste(HDC dc)
 {
-    char s[100], *p; RECT q; short w, n, i; BYTE z = (BYTE)(zustand == S_ENDE ? sieger : dran);
+    char s[100], *p; RECT q; short w, n, i; WORD k = schmal ? 100 : 0; BYTE z = (BYTE)(zustand == S_ENDE ? sieger : dran);
     q.l = 0; q.t = 0; q.r = cw; q.b = yt; pinsel(dc, F_LEISTE); FillRect(dc, &q);
     SetPen(dc, C_BLACK); Line(dc, 0, yt - 1, cw, yt - 1);
     SetBkMode(dc, BK_TRANSPARENT); SetTextColor(dc, C_BLACK);
     if (zustand == S_LEER || zustand == S_NETZ || z > 1) { TextOut(dc, 4, 2, meld, -1); return; }
     q.l = 3; q.t = 3; q.r = 3 + th; q.b = 1 + th; pinsel(dc, z ? F_BLAU : F_ROT); FillRect(dc, &q); SetPen(dc, C_BLACK); Frame(dc, &q);
     p = sapp(s, name(z)); p = sapp(p, ": ");
-    p = sapp(p, T(11)); p = szahl(p, b[z].gold); p = sapp(p, T(12)); p = szahl(p, b[z].kugeln);
-    p = sapp(p, T(13)); p = szahl(p, b[z].pulver); p = sapp(p, T(14)); p = szahl(p, b[z].volk);
-    p = sapp(p, T(15)); p = szahl(p, b[z].steuer); *p++ = '%'; *p = 0;
+    p = sapp(p, T(11 + k)); p = szahl(p, b[z].gold); p = sapp(p, T(12 + k)); p = szahl(p, b[z].kugeln);
+    p = sapp(p, T(13 + k)); p = szahl(p, b[z].pulver); p = sapp(p, T(14 + k)); p = szahl(p, b[z].volk);
+    p = sapp(p, T(15 + k)); p = szahl(p, b[z].steuer); *p++ = '%'; *p = 0;
     TextOut(dc, 6 + th, 2, s, -1);
-    p = sapp(s, T(16)); n = wind < 0 ? -wind : wind;
+    p = sapp(s, T(16 + k)); n = wind < 0 ? -wind : wind;
     if (!n) *p++ = '-'; else for (i = 0; i <= (n - 1) / 2; i++) *p++ = (char)(wind < 0 ? '<' : '>');
     *p = 0;
     w = TextWidth(dc, s, -1); TextOut(dc, cw - 4 - w, 2, s, -1);
-    TextOut(dc, 4, 3 + th, meld, -1);
-    if (erg[0]) { w = TextWidth(dc, erg, -1); TextOut(dc, cw - 4 - w, 3 + th, erg, -1); }
+    w = erg[0] ? TextWidth(dc, erg, -1) : 0;
+    if (!w || TextWidth(dc, meld, -1) + w + 12 <= cw) {   /* passt beides: Meldung links, Ergebnis rechts */
+        TextOut(dc, 4, 3 + th, meld, -1);
+        if (w) TextOut(dc, cw - 4 - w, 3 + th, erg, -1);
+    } else TextOut(dc, 4, 3 + th, zustand == S_ZIEL ? meld : erg, -1);   /* schmal: eins von beiden */
 }
 
 static void kugel_xor(HDC dc)
@@ -511,7 +526,8 @@ static void groesse(void)
 {
     RECT r; HDC dc;
     GetClientRect(fe, &r); cw = r.r - r.l; ch = r.b - r.t;
-    dc = GetDC(fe); th = GetCaps(dc, CAPS_TEXTH); mono = (BYTE)(GetCaps(dc, CAPS_BPP) == 1); ReleaseDC(fe, dc);
+    dc = GetDC(fe); th = GetCaps(dc, CAPS_TEXTH); { short bpp = GetCaps(dc, CAPS_BPP); mono = (BYTE)(bpp == 1 ? 1 : bpp == 2 ? 2 : 0); } ReleaseDC(fe, dc);
+    schmal = (BYTE)(cw < 480);
     yt = 2 * th + 6;
     if (ch < yt + 40) ch = yt + 40;
 }
