@@ -54,6 +54,8 @@ enum { G_KI, G_ZWEI, G_HOST, G_JOIN };
 #define CM_NEU 101
 #define CM_AUFGEBEN 102
 #define CM_ENDE 103
+#define CM_MUSIK 104
+#define CM_KLANG 105
 #define CM_KANONE 111
 #define CM_KUGELN 112
 #define CM_PULVER 113
@@ -99,7 +101,7 @@ typedef struct {
 
 typedef struct { long x, y, vx, vy; } KUGEL;      /* 16.16: hohes Wort = Welteinheit */
 
-static HINST hi; static HWND fe;
+static HINST hi; static HWND fe; static HMENU men;
 static BYTE schmal;                               /* Fenster unter 480 Punkten: kurze Texte */
 static BYTE test, demo, ohne87, fpu, mono, zshot, staerke = 1, spielart, ich, sofort;
 static short cw, ch, yt, th;                      /* Fenster: Breite, Hoehe, Weltbeginn, Textzeile */
@@ -532,6 +534,75 @@ static void groesse(void)
     if (ch < yt + 40) ch = yt + 40;
 }
 
+/* ---- Klang -------------------------------------------------------------------------------- *
+ * Musik: BURGEN.IMF (neben BURGEN.EXE) laeuft mit SM_LOOP im Hintergrund, nur mit AdLib/Sound Blaster
+ * (OPL, Stimmen 0..5). Geraeusche als kurze Tonfolgen im Spieltakt (55 ms) ueber SndNote: bei OPL auf
+ * Stimme 7 mit Rausch-Instrument (laeuft neben der Musik), beim PC-Lautsprecher auf Stimme 0
+ * (dort statt der Musik nur Melodien zum Start und zum Ende). Schalter im Menue Spiel, RD2.INI [Burgen]. */
+typedef struct { BYTE n, t; } TON;                /* n MIDI-Note (0 = Pause), t Takte (0 = Ende) */
+static const TON t_schuss[] = { {45,1},{40,1},{35,1},{31,2},{0,0} };
+static const TON t_boden[]  = { {38,1},{33,1},{29,1},{26,2},{0,0} };
+static const TON t_burg[]   = { {50,1},{43,1},{38,1},{33,1},{28,2},{0,0} };
+static const TON t_pulver[] = { {55,1},{50,1},{45,1},{41,1},{38,1},{34,1},{31,1},{28,2},{26,3},{0,0} };
+static const TON t_kauf[]   = { {84,1},{88,1},{0,0} };
+static const TON t_start[]  = { {67,2},{72,3},{72,1},{72,2},{76,2},{74,2},{72,4},{0,1},{0,0} };
+static const TON t_sieg[]   = { {72,2},{76,2},{79,2},{84,6},{0,1},{0,0} };
+static const TON t_verl[]   = { {67,3},{63,3},{60,3},{55,6},{0,1},{0,0} };
+static const INSTR fx_instr = { { 0x0F, 0x00, 0xF5, 0x2F, 0x00 }, { 0x00, 0x00, 0xF4, 0x1F, 0x00 }, 0x0E, 0 };
+static BYTE klang = 1, musik = 1, opl, kk, notean, seqt, seqp, musik_laeuft;
+static const TON *seq; static char imf[80];
+static WORD hz(BYTE n)
+{
+    static const WORD bt[12] = { 262, 277, 294, 311, 330, 349, 370, 392, 415, 440, 466, 494 };
+    WORD f = bt[n % 12]; short o = (short)(n / 12 - 5);
+    while (o > 0) { f <<= 1; o--; }
+    while (o < 0) { f >>= 1; o++; }
+    return f;
+}
+static void ton_aus(void) { if (notean) { SndNoteOff(kk); notean = 0; } }
+static void ton(BYTE n)
+{
+    ton_aus();
+    if (!n) return;
+    if (SndNote(kk, n, 110) == 0) notean = 1; else SndBeep(hz(n), 50);
+}
+static void spiele(const TON *t, BYTE prio)       /* hoehere Prioritaet unterbricht */
+{
+    if (!klang || demo || (seq && prio < seqp)) return;
+    seq = t; seqt = 0; seqp = prio;
+}
+static void klang_takt(void)
+{
+    if (!klang || demo) { ton_aus(); return; }
+    if (seq) {
+        if (seqt) { seqt--; return; }
+        if (seq->t) { ton(seq->n); seqt = (BYTE)(seq->t - 1); seq++; return; }
+        seq = 0;
+    }
+    if (zustand == S_FLUG && ku.vy > 0) {        /* fallende Kugel pfeift, immer tiefer */
+        short n = 88 - (short)(ku.vy >> 13); if (n < 40) n = 40;
+        ton((BYTE)n);
+    } else ton_aus();
+}
+static void musik_aus(void) { if (musik_laeuft) { SndMusicStop(); musik_laeuft = 0; } }
+static void musik_an(void)
+{
+    if (!musik || demo || !opl || musik_laeuft) return;
+    if (SndMusicPlay(fe, imf, SM_LOOP) == 0) { musik_laeuft = 1; SndFocus(fe); }
+}
+static void klang_init(void)
+{
+    SYSINFO si; short n;
+    opl = (BYTE)((SndCaps() & (SC_OPL2 | SC_OPL3)) != 0);
+    kk = (BYTE)(opl ? 7 : 0);
+    if (opl) SndInstr(kk, &fx_instr);
+    imf[0] = 0;
+    if (InstRes(hi, imf, sizeof imf) == 0 || !imf[0]) { KernInfo(&si); kopie(imf, si.home, sizeof imf - 12); n = slen(imf); if (n && imf[n - 1] != '\\') imf[n++] = '\\'; imf[n] = 0; }
+    for (n = slen(imf); n > 0 && imf[n - 1] != '\\' && imf[n - 1] != ':'; n--) ;
+    kopie(imf + n, "BURGEN.IMF", sizeof imf - n);
+}
+static void schalter_zeigen(void) { MenuCheck(men, CM_MUSIK, musik); MenuCheck(men, CM_KLANG, klang); }
+
 /* ---- Netz --------------------------------------------------------------------------------- */
 static void senden(BYTE t, BYTE a, BYTE c, BYTE d, DWORD e)
 {
@@ -559,7 +630,8 @@ static void spiel_ende(void)
     dbgz("Sieger", sieger); dbgz("Grund", grund); dbgz("Runden", runde);
     if (test) DbgPrint(meld);
     InvalidateRect(fe, 0, FALSE);
-    if (!demo) SndBeep(sieger == ich || spielart == G_ZWEI ? 880 : 220, 300);
+    musik_aus(); seq = 0;
+    spiele(sieger == ich || spielart == G_ZWEI || (spielart == G_KI && sieger == 0) ? t_sieg : t_verl, 3);
     if (demo && test) TimerSet(fe, 2, 3000);    /* Testlauf: Fenster nach 3 s zu */
 }
 
@@ -634,7 +706,7 @@ static void flug_start(short k, short w, short l)
     fschritt = 0; ftick = TickCount(); bx = -1; zustand = S_FLUG; grund = 0;
     burg_neu_zeigen(dran);                        /* Rohre zeigen die Schussrichtung */
     setmeld(""); erg[0] = 0; zielmeld(); leiste_neu();
-    if (!demo) SndBeep(110, 40);
+    spiele(t_schuss, 1);
     if (test) { dbgz("Schuss Spieler", dran); dbgz("Kanone", k); dbgz("Winkel", w); dbgz("Ladung", l); }
 }
 
@@ -675,6 +747,7 @@ static BYTE aktion(BYTE t, BYTE a, BYTE c, BYTE d, BYTE vomnetz)
         default: return 0;
         }
         if (!vomnetz) senden('K', a, 0, 0, 0);
+        spiele(t_kauf, 1);
         schaden_zeigen();
         if (zustand == S_ZIEL) zielmeld();
         leiste_neu();
@@ -718,7 +791,7 @@ static void flug_tick(void)
     if (e == 9) { zug_ende(); return; }
     kx = hx; ky = hy; knall = 1; zustand = S_KNALL;
     dc = GetDC(fe); knall_xor(dc); ReleaseDC(fe, dc);
-    if (!demo) SndBeep(e == 1 ? 70 : 90, 120);
+    spiele(e == 1 ? t_boden : grund == 32 ? t_pulver : t_burg, 2);
 }
 static void knall_tick(void)
 {
@@ -855,6 +928,7 @@ static void spiel_aufbauen(DWORD seed)
     zustand = S_LEER;
     zug_beginn();
     InvalidateRect(fe, 0, FALSE);                 /* ganzes Bild (zeichnet auch die Ziellinie) */
+    if (opl && musik) musik_an(); else spiele(t_start, 3);
 }
 static void netz_start(void)
 {
@@ -865,7 +939,7 @@ static void netz_start(void)
 }
 static void neues_spiel_starten(void)
 {
-    netz_aus(); ziel_weg();
+    netz_aus(); ziel_weg(); musik_aus();
     if (spielart >= G_HOST) { ich = (BYTE)(spielart == G_JOIN); netz_start(); return; }
     ich = 0;
     spiel_aufbauen(startwert ? startwert : TickCount() * 2654435761UL + 1);
@@ -947,6 +1021,11 @@ static void befehl(WORD id)
     case CM_NEU: neues_spiel(); break;
     case CM_AUFGEBEN: if (mensch_dran() && MsgBox(fe, T(78), T(1), MB_YESNO | MB_ASK | MB_DEFNO) == ID_YES) aktion('A', 0, 0, 0, 0); break;
     case CM_ENDE: DestroyWindow(fe); break;
+    case CM_MUSIK:
+        musik ^= 1; ProfileSetStr(ini, "Burgen", "Musik", musik ? "1" : "0"); schalter_zeigen();
+        if (!musik) musik_aus(); else if (zustand != S_LEER && zustand != S_ENDE && zustand != S_NETZ) musik_an();
+        break;
+    case CM_KLANG: klang ^= 1; ProfileSetStr(ini, "Burgen", "Klang", klang ? "1" : "0"); schalter_zeigen(); if (!klang) { seq = 0; ton_aus(); } break;
     case CM_KANONE: kaufen(1); break;
     case CM_KUGELN: kaufen(2); break;
     case CM_PULVER: kaufen(3); break;
@@ -976,6 +1055,7 @@ static DWORD RDCALLBACK proc(HWND w, WORD msg, WORD p1, DWORD p2)
     case M_ERASEBKGND: return 1;
     case M_SIZE: if (fe) { groesse(); zielan = 0; InvalidateRect(w, 0, FALSE); UpdateWindow(w); ziel_hin(); } return 0;
     case M_TIMER:
+        if (p1 == 1) klang_takt();
         if (p1 == 2) { DestroyWindow(w); return 0; }
         if (zustand == S_FLUG) flug_tick();
         else if (zustand == S_KNALL) knall_tick();
@@ -1048,7 +1128,7 @@ static DWORD RDCALLBACK proc(HWND w, WORD msg, WORD p1, DWORD p2)
         getrennt_melden();
         return 0;
     case M_CLOSE: DestroyWindow(w); return 0;
-    case M_DESTROY: netz_aus(); TimerKill(w, 1); TimerKill(w, 2); dbg("BURGEN: Ende"); PostQuit(sieger); return 0;
+    case M_DESTROY: musik_aus(); seq = 0; ton_aus(); netz_aus(); TimerKill(w, 1); TimerKill(w, 2); dbg("BURGEN: Ende"); PostQuit(sieger); return 0;
     }
     return DefWindowProc(w, msg, p1, p2);
 }
@@ -1084,7 +1164,9 @@ short RDAPI RdMain(HINST inst, LPCSTR cmd, WORD show)
     d = GetDC(0); W = GetCaps(d, CAPS_W); H = GetCaps(d, CAPS_H); ReleaseDC(0, d);
     fe = CreateWindow("Burgen", T(1), WS_NORMAL | WS_VISIBLE, 4, H / 10, W - 8, H - H / 10 - 4, 0, 0, inst);
     if (!fe) return 2;
-    MenuSet(fe, MenuLoad(inst, 1));
+    men = MenuLoad(inst, 1); MenuSet(fe, men);
+    musik = (BYTE)(ProfileGetInt(ini, "Burgen", "Musik", 1) != 0); klang = (BYTE)(ProfileGetInt(ini, "Burgen", "Klang", 1) != 0);
+    klang_init(); schalter_zeigen();
     groesse();
     TimerSet(fe, 1, 55);
     setmeld(T(90));

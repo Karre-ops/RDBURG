@@ -50,8 +50,8 @@ TEXTE
   79 "Laufendes Spiel abbrechen?"
   80 "Jede Burg hat einen K”nig, Kanonen, ein Pulverlager, eine Schatzkammer und ein Bergwerk. Wer am Zug ist, kann einkaufen (Men Burg) und schieát dann einmal.\n\nZielen: Pfeile links/rechts = Winkel, Pos1/Ende = 10 Grad, hoch/runter = Ladung, Bild hoch/runter = 10. Tab = n„chste Kanone, Eingabe = Feuer. Maus: in die Richtung ziehen, rechte Taste = Feuer.\n\nDer Wind (oben rechts) treibt die Kugel ab. Steuern bringen Gold, zu hohe vertreiben das Volk. Wer den K”nig trifft, gewinnt."
   81 "Spielregeln"
-  82 "Burgenkampf 1.1 fr RetroDesk 2\n\nKein Koprozessor: der Computer zielt mit Probeschssen."
-  83 "Burgenkampf 1.1 fr RetroDesk 2\n\nKoprozessor gefunden: der Computer rechnet die Flugbahn mit dem 8087 vor."
+  82 "Burgenkampf 1.2 fr RetroDesk 2\n\nKein Koprozessor: der Computer zielt mit Probeschssen."
+  83 "Burgenkampf 1.2 fr RetroDesk 2\n\nKoprozessor gefunden: der Computer rechnet die Flugbahn mit dem 8087 vor."
   90 "Spiel > Neues Spiel beginnt eine Partie."
   111 "G "
   112 " K "
@@ -67,6 +67,9 @@ MENU 1
   POPUP "&Spiel"
     ITEM "&Neues Spiel..." 101
     ITEM "&Aufgeben" 102
+    TRENNER
+    ITEM "&Musik" 104 HAKEN
+    ITEM "&Ger„usche" 105 HAKEN
     TRENNER
     ITEM "&Beenden" 103
   ENDE
@@ -154,8 +157,8 @@ TEXTE
   79 "Abort the running game?"
   80 "Each castle has a king, cannons, a powder store, a treasury and a mine. On your turn you may buy things (Castle menu), then you fire once.\n\nAiming: left/right = angle, Home/End = 10 degrees, up/down = charge, PgUp/PgDn = 10. Tab = next cannon, Enter = fire. Mouse: drag towards the target, right button = fire.\n\nThe wind (top right) drifts the ball. Taxes bring gold, too high taxes drive people away. Hit the king to win."
   81 "Rules"
-  82 "Castle Clash 1.1 for RetroDesk 2\n\nNo coprocessor: the computer aims with test shots."
-  83 "Castle Clash 1.1 for RetroDesk 2\n\nCoprocessor found: the computer solves the trajectory with the 8087."
+  82 "Castle Clash 1.2 for RetroDesk 2\n\nNo coprocessor: the computer aims with test shots."
+  83 "Castle Clash 1.2 for RetroDesk 2\n\nCoprocessor found: the computer solves the trajectory with the 8087."
   90 "Game > New game starts a match."
   111 "G "
   112 " B "
@@ -171,6 +174,9 @@ MENU 1
   POPUP "&Game"
     ITEM "&New game..." 101
     ITEM "&Give up" 102
+    TRENNER
+    ITEM "&Music" 104 HAKEN
+    ITEM "&Sound effects" 105 HAKEN
     TRENNER
     ITEM "E&xit" 103
   ENDE

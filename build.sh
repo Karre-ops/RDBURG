@@ -1,7 +1,7 @@
 #!/bin/bash
 # Burgenkampf bauen: braucht eine gebaute Arbeitskopie von Karre-ops/retrodesk2 (SDK API 2.0, out/RD2.LIB,
 # obj/rd2start.obj, tools/rdrc.py, tools/rd2link.py) und Open Watcom. Aufruf: RD2=<pfad zu retrodesk2> ./build.sh
-# Ergebnis: out/BURGEN.EXE
+# Ergebnis: out/BURGEN.EXE und out/BURGEN.IMF
 set -e
 cd "$(dirname "$0")"
 RD2=${RD2:-../retrodesk2}
@@ -14,4 +14,5 @@ wlink option quiet format dos name out/BURGEN.EXE file obj/rd2start.obj,obj/burg
   library $RD2/out/RD2.LIB,$WATCOM/lib286/dos/clibm.lib option nodefaultlibs,map=obj/burgen.map >/dev/null
 python3 $RD2/tools/rdrc.py src/BURGEN.RC obj/burgen.res >/dev/null
 python3 $RD2/tools/rd2link.py out/BURGEN.EXE "Burgenkampf" --stack 6144 --res obj/burgen.res
-ls -l out/BURGEN.EXE | awk '{print "BURGEN.EXE", $5, "Bytes"}'
+python3 tools/mkmusik.py src/MUSIK.TXT out/BURGEN.IMF          # Hintergrundmusik (AdLib/SB), gehoert neben BURGEN.EXE
+ls -l out/BURGEN.EXE out/BURGEN.IMF | awk '{print $9, $5, "Bytes"}'
